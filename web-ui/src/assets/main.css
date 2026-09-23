@@ -1,0 +1,195 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Goofish-inspired design tokens
+   - Brand yellow #ffe60f for primary / active
+   - Op blue #3178f6 for primary actions
+   - Cool gray bg #f5f7f9
+   - Tight radius scale (12/16/20)
+   - 14px body / 11-17px content
+   ============================================================ */
+
+@layer base {
+  :root {
+    /* HSL tokens (Tailwind opacity modifiers require <alpha-value>) */
+    --background: 210 17% 96%;
+    --foreground: 0 0% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 12%;
+
+    --primary: 56 100% 52%;          /* #ffe60f */
+    --primary-foreground: 0 0% 12%;
+
+    --secondary: 210 17% 96%;
+    --secondary-foreground: 0 0% 12%;
+
+    --muted: 210 17% 96%;
+    --muted-foreground: 0 0% 40%;
+
+    --accent: 56 100% 92%;           /* #fff7c2 */
+    --accent-foreground: 0 0% 12%;
+
+    --op: 217 91% 58%;               /* #3178f6 */
+    --op-foreground: 0 0% 100%;
+
+    --success: 161 84% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 33 100% 50%;
+    --warning-foreground: 0 0% 12%;
+
+    --info: 217 91% 58%;
+    --info-foreground: 0 0% 100%;
+
+    --price: 11 100% 57%;            /* #ff4f24 */
+    --price-foreground: 0 0% 100%;
+
+    --highlight: 30 91% 48%;         /* #f58300 */
+
+    --destructive: 355 100% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 92%;              /* #ececec */
+    --input: 0 0% 92%;
+    --ring: 56 100% 52%;
+
+    --radius: 16px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    line-height: 1.5;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell,
+      "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+      "Segoe UI Symbol", "Noto Color Emoji", BlinkMacSystemFont, "Helvetica Neue",
+      Arial, "PingFang SC", "PingFang TC", "PingFang HK", "Microsoft Yahei",
+      "Microsoft JhengHei";
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    min-height: 100%;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
+
+@layer components {
+  /* 闲鱼风卡�?*/
+  .xy-card {
+    @apply rounded-2xl border border-border bg-card text-card-foreground shadow-sm;
+  }
+  .xy-card-flat {
+    @apply rounded-2xl border border-border bg-card text-card-foreground;
+  }
+
+  .xy-chip {
+    @apply inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground;
+  }
+  .xy-chip-yellow {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-slate-900;
+    background-color: hsl(var(--primary));
+  }
+  .xy-chip-op {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white;
+    background-color: hsl(var(--op));
+  }
+
+  /* 闲鱼风按钮：胶囊圆角、高�?36-40px */
+  .xy-btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+    min-height: 36px;
+  }
+  .xy-btn-primary {
+    @apply xy-btn text-slate-900;
+    background-color: hsl(var(--primary));
+  }
+  .xy-btn-primary:hover {
+    background-color: hsl(56 100% 64%);
+  }
+  .xy-btn-op {
+    @apply xy-btn text-white;
+    background-color: hsl(var(--op));
+  }
+  .xy-btn-op:hover {
+    background-color: hsl(217 91% 50%);
+  }
+.xy-btn-ghost {
+    @apply xy-btn bg-muted text-foreground hover:bg-muted;
+  }
+  .xy-btn-outline {
+    @apply xy-btn border border-border bg-card text-foreground hover:bg-muted;
+  }
+  .xy-btn-danger {
+    @apply xy-btn text-white;
+    background-color: hsl(var(--destructive));
+  }
+
+  /* 价格 / 数字 */
+  .xy-price {
+    @apply font-bold tabular leading-none;
+    color: hsl(var(--price));
+  }
+  .xy-price-sign {
+    @apply text-sm font-semibold tabular;
+    color: hsl(var(--price));
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.32);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+
+

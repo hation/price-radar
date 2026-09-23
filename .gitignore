@@ -1,0 +1,56 @@
+# Editors / IDEs
+.idea
+*.iml
+.vscode/
+.claude/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Secrets / local env
+xianyu_state.json
+.env
+.env.local
+.env.*.local
+.aider*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+
+# Node / frontend build output
+node_modules/
+dist/
+
+# App data & runtime artifacts
+images/
+task_images/
+logs/
+*.log
+jsonl/
+state/
+config.json
+prompts/
+.serena/
+price_history/
+data/
+archive/
+# 登录态 / 浏览器指纹 / 运行数据(绝不入库!)
+state/
+data/
+logs/
+watchlist.json
+config.json
+taobao_state.json
+jd_state.json
