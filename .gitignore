@@ -41,14 +41,13 @@ logs/
 jsonl/
 state/
 config.json
-prompts/
 .serena/
 price_history/
-data/
+/data/
 archive/
 # 登录态 / 浏览器指纹 / 运行数据(绝不入库!)
 state/
-data/
+/data/
 logs/
 watchlist.json
 config.json
