@@ -175,5 +175,48 @@ def cmd_task(args):
 
 
 def _cmd_task_start_stop(args, repo):
-    """start/stop 的占位实现（下一任务补全）。"""
-    print("待实现")
+    """start: 终端前台运行任务（Ctrl+C 中断）；stop: 清理任务运行状态标记。"""
+    from src.platforms import get_scraper, platform_display_name
+
+    task = asyncio.run(repo.find_by_id(args.id))
+    if task is None:
+        print(f"任务 #{args.id} 不存在")
+        return
+
+    if args.task == "stop":
+        if not task.is_running:
+            print(f"任务 #{args.id} 未在运行")
+            return
+        cleaned = task.model_copy(
+            update={"is_running": False, "execution_status": "idle"}
+        )
+        asyncio.run(repo.save(cleaned))
+        print(
+            f"已清理任务 #{args.id} 运行状态；若该任务由 Web 服务进程启动，"
+            f"请到 Web UI 停止对应进程"
+        )
+        return
+
+    # start
+    if not task.enabled:
+        print(f"任务 #{args.id} 已被禁用，跳过执行")
+        return
+    from pr import _check_platform_ready
+    if not _check_platform_ready(task.platform):
+        return
+    task_config = task.model_dump()
+    plat = task_config.get("platform") or "goofish"
+    print(f"-> 任务 '{task.task_name}' [{platform_display_name(plat)}] 开始运行（Ctrl+C 中断）")
+    try:
+        count = asyncio.run(
+            get_scraper(plat)(task_config=task_config, debug_limit=0)
+        )
+    except KeyboardInterrupt:
+        print("\n已中断")
+        return
+    print(f"任务 '{task.task_name}' 结束，本次新增 {count} 个商品")
+
+
+def _check_platform_ready(platform):
+    """平台前置检查（Task 6 补全完整实现：闲鱼 CDP 探测）。"""
+    return True

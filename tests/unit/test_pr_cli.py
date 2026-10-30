@@ -163,3 +163,56 @@ def test_task_delete_missing(tmp_path, monkeypatch, capsys):
 def asyncio_run(coro):
     import asyncio
     return asyncio.run(coro)
+
+
+from pr import _cmd_task_start_stop
+from src.domain.models.task import Task
+
+
+def make_task():
+    return Task(
+        id=0, task_name="t", keyword="k", enabled=True, max_pages=1,
+        personal_only=True, decision_mode="keyword",
+        ai_prompt_base_file="prompts/base_prompt.txt",
+        ai_prompt_criteria_file="",
+    )
+
+
+def test_task_start_runs_scraper(tmp_path, monkeypatch, capsys):
+    import asyncio
+    from src.infrastructure.persistence.sqlite_task_repository import SqliteTaskRepository
+    repo = SqliteTaskRepository(db_path=str(tmp_path / "test.db"))
+    saved = asyncio.run(repo.save(make_task()))
+
+    captured = {}
+
+    async def fake_scraper(task_config=None, debug_limit=0):
+        captured["config"] = task_config
+        return 7
+
+    monkeypatch.setattr("src.platforms.get_scraper", lambda plat: fake_scraper)
+
+    class StartArgs:
+        task = "start"
+        id = saved.id
+
+    _cmd_task_start_stop(StartArgs(), repo)
+    assert captured["config"]["keyword"] == "k"
+    assert "新增 7 个" in capsys.readouterr().out
+
+
+def test_task_stop_clears_running_flag(tmp_path, monkeypatch):
+    import asyncio
+    from src.infrastructure.persistence.sqlite_task_repository import SqliteTaskRepository
+    repo = SqliteTaskRepository(db_path=str(tmp_path / "test.db"))
+    running = make_task().model_copy(update={"is_running": True, "execution_status": "running"})
+    saved = asyncio.run(repo.save(running))
+
+    class StopArgs:
+        task = "stop"
+        id = saved.id
+
+    _cmd_task_start_stop(StopArgs(), repo)
+    after = asyncio.run(repo.find_by_id(saved.id))
+    assert after.is_running is False
+    assert after.execution_status == "idle"
