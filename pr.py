@@ -6,6 +6,8 @@ import csv
 import json
 import os
 
+from src.infrastructure.persistence.sqlite_task_repository import SqliteTaskRepository
+
 
 def _parse_args(argv=None):
     parser = argparse.ArgumentParser(
@@ -42,7 +44,7 @@ async def main(argv=None):
         await cmd_crawl(args)
     elif args.task:
         from pr import cmd_task
-        await cmd_task(args)
+        cmd_task(args)
     elif args.trend:
         from pr import cmd_trend
         cmd_trend(args)
@@ -117,3 +119,61 @@ def _export_trend_csv(path, trend):
             writer.writerow(
                 [p["day"], p["sample_count"], p["min_price"], p["avg_price"], p["max_price"]]
             )
+
+
+def cmd_task(args):
+    """任务管理: list / create / start / stop / delete（复用 Web 同一 SQLite）。"""
+    from src.domain.models.task import Task
+    from src.platforms import normalize_platform_key
+
+    repo = SqliteTaskRepository()
+    action = args.task
+
+    if action == "list":
+        tasks = asyncio.run(repo.find_all())
+        _render_table(
+            ["ID", "名称", "关键词", "平台", "启用", "运行中", "定时"],
+            [
+                [t.id, t.task_name, t.keyword, t.platform, t.enabled, t.is_running, t.cron or ""]
+                for t in tasks
+            ],
+        )
+        return
+
+    if action == "create":
+        if not args.name or not args.keyword:
+            print("create 需要 --name 和 --keyword。示例: --task create --name x --keyword x")
+            return
+        task = Task(
+            task_name=args.name,
+            keyword=args.keyword,
+            enabled=True,
+            max_pages=args.pages,
+            personal_only=True,
+            platform=normalize_platform_key(args.platform),
+            decision_mode="keyword",
+            ai_prompt_base_file="prompts/base_prompt.txt",
+            ai_prompt_criteria_file="",
+        )
+        saved = asyncio.run(repo.save(task))
+        print(f"已创建任务 #{saved.id}: {saved.task_name}（keyword 模式，不依赖 AI）")
+        return
+
+    if action == "delete":
+        if args.id is None:
+            print("delete 需要 --id")
+            return
+        ok = asyncio.run(repo.delete(args.id))
+        print(f"已删除任务 #{args.id}" if ok else f"任务 #{args.id} 不存在")
+        return
+
+    if action in ("start", "stop"):
+        _cmd_task_start_stop(args, repo)
+        return
+
+    print(f"未知 task 动作: {action}（可选 list/create/start/stop/delete）")
+
+
+def _cmd_task_start_stop(args, repo):
+    """start/stop 的占位实现（下一任务补全）。"""
+    print("待实现")

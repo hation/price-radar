@@ -88,3 +88,78 @@ def test_trend_no_snapshots(monkeypatch, capsys):
 
     cmd_trend(Args())
     assert "暂无价格快照" in capsys.readouterr().out
+
+
+import pytest
+
+from pr import cmd_task
+from src.domain.models.task import Task
+
+
+def make_repo(tmp_path, monkeypatch):
+    """用临时 SQLite 构造 repository 并替换 cmd_task 内部创建的实例。"""
+    from src.infrastructure.persistence.sqlite_task_repository import SqliteTaskRepository
+    repo = SqliteTaskRepository(db_path=str(tmp_path / "test.db"))
+    monkeypatch.setattr("pr.SqliteTaskRepository", lambda: repo)
+    return repo
+
+
+def test_task_create_then_list(tmp_path, monkeypatch, capsys):
+    repo = make_repo(tmp_path, monkeypatch)
+
+    class CreateArgs:
+        task = "create"
+        name = "新任务"
+        keyword = "新关键词"
+        pages = 2
+        platform = "goofish"
+        id = None
+
+    cmd_task(CreateArgs())
+    tasks = asyncio_run(repo.find_all())
+    assert len(tasks) == 1
+    assert tasks[0].task_name == "新任务"
+    assert tasks[0].decision_mode == "keyword"
+
+    class ListArgs:
+        task = "list"
+        id = None
+
+    cmd_task(ListArgs())
+    out = capsys.readouterr().out
+    assert "新任务" in out
+
+
+def test_task_delete(tmp_path, monkeypatch, capsys):
+    repo = make_repo(tmp_path, monkeypatch)
+    task = Task(
+        task_name="t", keyword="k", enabled=True, max_pages=1,
+        personal_only=True,
+        decision_mode="keyword", ai_prompt_base_file="prompts/base_prompt.txt",
+        ai_prompt_criteria_file="",
+    )
+    saved = asyncio_run(repo.save(task))
+
+    class DeleteArgs:
+        task = "delete"
+        id = saved.id
+
+    cmd_task(DeleteArgs())
+    assert asyncio_run(repo.find_by_id(saved.id)) is None
+    assert "已删除" in capsys.readouterr().out
+
+
+def test_task_delete_missing(tmp_path, monkeypatch, capsys):
+    make_repo(tmp_path, monkeypatch)
+
+    class DeleteArgs:
+        task = "delete"
+        id = 999
+
+    cmd_task(DeleteArgs())
+    assert "不存在" in capsys.readouterr().out
+
+
+def asyncio_run(coro):
+    import asyncio
+    return asyncio.run(coro)
