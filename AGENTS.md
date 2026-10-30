@@ -13,6 +13,20 @@
 - 一键本地启动：`bash start.sh`（自动安装依赖、前端构建并启动后端）。
 - Docker：`docker compose up --build -d`，查看日志 `docker compose logs -f app`，停止 `docker compose down`。
 
+## CLI 命令速查（pr.py）
+仓库根目录的 `pr.py` 是轻量命令行入口，无需启动 Web 服务即可爬取/管理任务/查走势。详细文档见 `docs/cli.md`。
+
+```bash
+python pr.py --crawl KEYWORD [--platform PLATFORM] [--pages N] [--mode ai|keyword] [--json]   # 按关键词爬取并落库（积累价格快照）
+python pr.py --task list|create|start|stop|delete                                            # 任务管理（与 Web UI 共用同一 SQLite）
+python pr.py --trend KEYWORD [--days N] [--export PATH] [--json]                             # 历史走势（每日最低/均价/最高价）
+python pr.py --help                                                                          # 参数速查
+```
+
+- `--crawl`/`--task`/`--trend` 三选一互斥；`--platform` 未知值回落闲鱼；默认表格输出，`--json` 切 JSON。
+- 闲鱼爬取前自动探测 CDP 专用 Chrome（9222 端口），未启动会打印 macOS 启动命令；登录态持久化于 `state/cdp-chrome-profile/`。
+- `--trend` 按关键词精确匹配快照，空格/斜杠不一致会查不到，需与 `--crawl` 使用同一关键词。
+
 ## 编码风格与命名约定
 - 保持分层：API → services → domain → infrastructure，避免跨层耦合，模块保持精简。
 - Python 测试函数命名为 `test_*`，文件与路径遵循上述测试目录规范。
