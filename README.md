@@ -153,6 +153,38 @@ cd web-ui && npm install && npm run dev # 前端开发服务器
 4. 在「**系统设置 → AI 模型**」填好 AI 配置并测试连接。
 5. 在任务列表点击「启动」开始监控；命中商品会自动推送到已启用的通知渠道。
 
+## 🖥️ CLI 命令行使用（pr.py）
+
+项目内置轻量命令行入口 `pr.py`，无需启动 Web 服务即可按关键词爬取、管理任务、查询历史走势，输出支持表格与 JSON 两种格式（`--json`）。
+
+```bash
+# 按关键词爬取（默认纯采集，落库并积累价格快照；未知平台回落闲鱼）
+python pr.py --crawl "iphone 15" --pages 3
+python pr.py --crawl "iphone 15" --json          # 结构化输出
+python pr.py --crawl "三星/SK 64G5600" --mode ai # AI 模式（需先有分析标准文件）
+
+# 任务管理（与 Web UI 共用同一套 SQLite 任务数据）
+python pr.py --task list                          # 查看所有任务
+python pr.py --task create --name "xxx" --keyword "xxx" --pages 3
+python pr.py --task start --id 0                  # 终端前台运行任务（Ctrl+C 中断）
+python pr.py --task stop --id 0                   # 清理任务运行状态
+python pr.py --task delete --id 1
+
+# 历史走势（每日最低/均价/最高价，数据来自每次爬取的价格快照）
+python pr.py --trend "iphone 15" --days 30
+python pr.py --trend "iphone 15" --export trend.csv --json
+
+# 帮助
+python pr.py --help
+```
+
+**参数速查**：`--crawl KEYWORD` / `--task ACTION` / `--trend KEYWORD` 三选一；`--platform`（goofish/jd/taobao/1688）、`--pages`（默认 3）、`--mode`（ai/keyword）、`--json`、`--days`（默认 30）、`--export PATH`、`--name`/`--keyword`/`--id`（配合 `--task`）。
+
+**注意事项**：
+- 闲鱼（goofish）爬取前会自动探测 CDP 专用 Chrome（端口 9222）；未启动时会打印 macOS 启动命令，需先启动并登录一次闲鱼。其他平台登录态由平台函数内部处理。
+- `--trend` 按关键词精确匹配快照，空格/斜杠不一致会查不到（例如 Web 任务保存了多个空格的关键词）。用同一关键词执行 `--crawl` 后查询即可闭环。
+- `--crawl` 的 AI 模式需要该关键词的分析标准文件（`prompts/<keyword>_criteria.txt`）；当前采集管线为纯抓取，AI 分析由任务运行管线执行。
+
 ## 功能详解
 
 <details>
