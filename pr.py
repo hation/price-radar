@@ -2,6 +2,7 @@
 """price-radar 命令行入口：按关键词爬取 / 任务管理 / 历史走势查询。"""
 import argparse
 import asyncio
+import json
 
 
 def _parse_args(argv=None):
@@ -47,3 +48,23 @@ async def main(argv=None):
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+def _render_table(headers, rows):
+    """标准库文本对齐表格；rows 为空时打印 (无数据)。"""
+    if not rows:
+        print("(无数据)")
+        return
+    widths = [len(str(header)) for header in headers]
+    for row in rows:
+        for i, value in enumerate(row):
+            widths[i] = max(widths[i], len(str(value)))
+    print("  ".join(str(h).ljust(widths[i]) for i, h in enumerate(headers)))
+    print("  ".join("-" * width for width in widths))
+    for row in rows:
+        print("  ".join(str(v).ljust(widths[i]) for i, v in enumerate(row)))
+
+
+def _print_json(obj):
+    """JSON 结构化输出（机器可解析）。"""
+    print(json.dumps(obj, ensure_ascii=False, indent=2))
