@@ -2,7 +2,9 @@
 """price-radar 命令行入口：按关键词爬取 / 任务管理 / 历史走势查询。"""
 import argparse
 import asyncio
+import csv
 import json
+import os
 
 
 def _parse_args(argv=None):
@@ -43,7 +45,7 @@ async def main(argv=None):
         await cmd_task(args)
     elif args.trend:
         from pr import cmd_trend
-        await cmd_trend(args)
+        cmd_trend(args)
 
 
 if __name__ == "__main__":
@@ -68,3 +70,50 @@ def _render_table(headers, rows):
 def _print_json(obj):
     """JSON 结构化输出（机器可解析）。"""
     print(json.dumps(obj, ensure_ascii=False, indent=2))
+
+
+def cmd_trend(args):
+    """查询关键词历史价格走势（每日 min/avg/max）。"""
+    from src.services.price_history_service import (
+        build_price_history_insights,
+        load_price_snapshots,
+    )
+
+    snapshots = load_price_snapshots(args.trend)
+    if not snapshots:
+        print(f"关键词 '{args.trend}' 暂无价格快照。请先 --crawl 或运行任务积累数据。")
+        return
+
+    insights = build_price_history_insights(args.trend, window_days=args.days)
+    if args.json:
+        _print_json(insights)
+        return
+
+    print(f"关键词: {args.trend}（近 {args.days} 天）  最新快照: {insights['latest_snapshot_at']}")
+    market = insights["market_summary"]
+    print(
+        f"市场样本: {market['sample_count']} 条 | 均价 ¥{market['avg_price']} | "
+        f"最低 ¥{market['min_price']} | 最高 ¥{market['max_price']}"
+    )
+    trend = insights["daily_trend"]
+    _render_table(
+        ["日期", "样本", "最低价", "均价", "最高价"],
+        [
+            [p["day"], p["sample_count"], p["min_price"], p["avg_price"], p["max_price"]]
+            for p in trend
+        ],
+    )
+    if args.export:
+        _export_trend_csv(args.export, trend)
+        print(f"已导出: {args.export}")
+
+
+def _export_trend_csv(path, trend):
+    """导出每日走势为 CSV。"""
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["day", "sample_count", "min_price", "avg_price", "max_price"])
+        for p in trend:
+            writer.writerow(
+                [p["day"], p["sample_count"], p["min_price"], p["avg_price"], p["max_price"]]
+            )
