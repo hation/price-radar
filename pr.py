@@ -37,7 +37,7 @@ def _parse_args(argv=None):
     return parser.parse_args(argv)
 
 
-async def main(argv=None):
+def main(argv=None):
     args = _parse_args(argv)
     if args.crawl:
         from pr import cmd_crawl
@@ -51,7 +51,7 @@ async def main(argv=None):
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
 
 
 def _render_table(headers, rows):
@@ -252,6 +252,8 @@ def cmd_crawl(args):
     total, items = asyncio.run(
         query_result_records(
             build_result_filename(args.crawl),
+            ai_recommended_only=False,
+            keyword_recommended_only=False,
             sort_by="crawl_time",
             sort_order="desc",
             page=1,
