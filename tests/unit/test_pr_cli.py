@@ -191,6 +191,7 @@ def test_task_start_runs_scraper(tmp_path, monkeypatch, capsys):
         return 7
 
     monkeypatch.setattr("src.platforms.get_scraper", lambda plat: fake_scraper)
+    monkeypatch.setattr("pr._check_platform_ready", lambda plat: True)
 
     class StartArgs:
         task = "start"
@@ -216,3 +217,56 @@ def test_task_stop_clears_running_flag(tmp_path, monkeypatch):
     after = asyncio.run(repo.find_by_id(saved.id))
     assert after.is_running is False
     assert after.execution_status == "idle"
+
+
+from pr import cmd_crawl, _check_platform_ready
+
+
+def make_args(**overrides):
+    defaults = dict(crawl="三星", platform="goofish", pages=3, mode="keyword", json=True)
+    defaults.update(overrides)
+    return type("Args", (), defaults)()
+
+
+def test_crawl_calls_scraper_and_reads_results(monkeypatch, capsys):
+    import asyncio
+    captured = {}
+
+    async def fake_scraper(task_config=None, debug_limit=0):
+        captured["config"] = task_config
+        return 2
+
+    monkeypatch.setattr("src.platforms.get_scraper", lambda plat: fake_scraper)
+    monkeypatch.setattr("pr._check_platform_ready", lambda plat: True)
+
+    async def fake_query(filename, sort_by, sort_order, page, limit,
+                         ai_recommended_only=False, keyword_recommended_only=False,
+                         include_hidden=False, recent_days=None):
+        items = [
+            {"商品信息": {"商品标题": "货A", "当前售价": "¥100", "商品链接": "http://a"},
+             "ai_analysis": {"is_recommended": True}},
+            {"商品信息": {"商品标题": "货B", "当前售价": "¥200", "商品链接": "http://b"},
+             "ai_analysis": {"is_recommended": False}},
+        ]
+        return 2, items
+
+    monkeypatch.setattr("src.services.result_storage_service.query_result_records", fake_query)
+
+    cmd_crawl(make_args())
+    assert captured["config"]["keyword"] == "三星"
+    assert captured["config"]["platform"] == "goofish"
+    out = capsys.readouterr().out
+    assert "货A" in out and "货B" in out
+
+
+def test_platform_ready_goofish_cdp_down(capsys, monkeypatch):
+    def fake_urlopen(url, timeout=3):
+        raise OSError("down")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    assert _check_platform_ready("goofish") is False
+    assert "9222" in capsys.readouterr().out
+
+
+def test_platform_ready_non_goofish_returns_true():
+    assert _check_platform_ready("jd") is True

@@ -41,7 +41,7 @@ async def main(argv=None):
     args = _parse_args(argv)
     if args.crawl:
         from pr import cmd_crawl
-        await cmd_crawl(args)
+        cmd_crawl(args)
     elif args.task:
         from pr import cmd_task
         cmd_task(args)
@@ -217,6 +217,84 @@ def _cmd_task_start_stop(args, repo):
     print(f"任务 '{task.task_name}' 结束，本次新增 {count} 个商品")
 
 
+def cmd_crawl(args):
+    """按关键词爬取并落库（默认 keyword 模式，纯采集）。"""
+    from src.platforms import get_scraper, normalize_platform_key, platform_display_name
+    from src.services.result_storage_service import query_result_records
+    from src.services.task_generation_runner import build_criteria_filename
+    from src.infrastructure.persistence.storage_names import build_result_filename
+
+    platform = normalize_platform_key(args.platform)
+    if not _check_platform_ready(platform):
+        return
+
+    if args.mode == "ai":
+        criteria = build_criteria_filename(args.crawl)
+        if not os.path.exists(criteria):
+            print(f"关键词 '{args.crawl}' 尚无分析标准文件: {criteria}")
+            print("请先在 Web UI 用 AI 生成任务，或改用 --mode keyword 纯采集。")
+            return
+        print(f"[info] 将采用分析标准: {criteria}（当前采集管线为纯抓取，AI 分析由任务管线执行）")
+
+    task_config = {
+        "task_name": args.crawl,
+        "keyword": args.crawl,
+        "platform": platform,
+        "max_pages": args.pages,
+        "decision_mode": args.mode,
+    }
+    print(f"开始爬取: {args.crawl} [{platform_display_name(platform)}] {args.pages} 页")
+    count = asyncio.run(get_scraper(platform)(task_config=task_config, debug_limit=0))
+    print(f"本次新增 {count} 个商品")
+    if count <= 0:
+        return
+
+    total, items = asyncio.run(
+        query_result_records(
+            build_result_filename(args.crawl),
+            sort_by="crawl_time",
+            sort_order="desc",
+            page=1,
+            limit=min(count, 50),
+        )
+    )
+    _print_items(items, json_out=args.json)
+
+
+def _print_items(items, json_out=False):
+    """输出商品结果：JSON 或表格。"""
+    if json_out:
+        _print_json(items)
+        return
+    rows = []
+    for record in items:
+        item = record.get("商品信息", {})
+        analysis = record.get("ai_analysis", {}) or {}
+        rows.append(
+            [
+                str(item.get("商品标题") or "")[:30],
+                str(item.get("当前售价") or ""),
+                "推荐" if analysis.get("is_recommended") else "-",
+                str(item.get("商品链接") or ""),
+            ]
+        )
+    _render_table(["标题", "价格", "AI推荐", "链接"], rows)
+
+
 def _check_platform_ready(platform):
-    """平台前置检查（Task 6 补全完整实现：闲鱼 CDP 探测）。"""
-    return True
+    """平台前置检查：闲鱼需 CDP 专用 Chrome(9222)，其余平台由平台函数内部处理登录态。"""
+    if platform != "goofish":
+        return True
+    try:
+        import urllib.request
+        urllib.request.urlopen("http://127.0.0.1:9222/json/version", timeout=3)
+        return True
+    except Exception:
+        from src.platforms._web import CDP_PROFILE_DIR
+        print("闲鱼需要 CDP 专用 Chrome（端口 9222），当前未启动。启动命令：")
+        print(
+            f'  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" '
+            f"--remote-debugging-port=9222 --user-data-dir={CDP_PROFILE_DIR}"
+        )
+        print("启动后需在 Chrome 里登录闲鱼一次（登录态持久化）。")
+        return False
