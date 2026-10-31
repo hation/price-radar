@@ -28,11 +28,12 @@ python pr.py --help                                                             
 - `--trend` 按关键词精确匹配快照，空格/斜杠不一致会查不到，需与 `--crawl` 使用同一关键词。
 
 ## 快捷触发词（用户短句 → 自动展开的完整行为）
-当用户说「爬取 X 数据」（如「爬取希捷数据」），默认展开为多平台前 10 页爬取与汇总：
+**完整速查文档见 `docs/quick-commands.md`（务必读取）。** 当用户说「爬取 X 数据」（如「爬取希捷数据」），默认展开为多平台前 10 页爬取与汇总：
 1. 执行：`python pr.py --crawl "X" --pages 10 --platform all`（闲鱼/京东/淘宝/1688 全部平台）
 2. 平台未登录导致失败时：跳过该平台并说明原因，继续其余平台
 3. 爬完后检查 `output/` 下最新文件夹，确认有分平台 CSV、合并 CSV（含 platform 列）、JSONL
 4. 向用户汇报：合并 CSV 完整路径 + 各平台抓到多少条
+其他触发词（查走势/看任务/要 CSV）与使用前提（CDP Chrome、登录态）见 `docs/quick-commands.md`。
 
 ## 编码风格与命名约定
 - 保持分层：API → services → domain → infrastructure，避免跨层耦合，模块保持精简。
