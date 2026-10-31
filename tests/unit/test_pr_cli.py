@@ -270,3 +270,41 @@ def test_platform_ready_goofish_cdp_down(capsys, monkeypatch):
 
 def test_platform_ready_non_goofish_returns_true():
     assert _check_platform_ready("jd") is True
+
+
+def _args(platform="all", crawl="希捷", pages=1, mode="keyword", json=False):
+    return type("Args", (), dict(platform=platform, crawl=crawl, pages=pages,
+                                 mode=mode, json=json))()
+
+
+def test_crawl_all_iterates_platforms_and_exports(monkeypatch, capsys):
+    captured = {}
+
+    async def fake_scraper(task_config=None, debug_limit=0):
+        captured.setdefault("platforms", []).append(task_config["platform"])
+        return 1
+
+    monkeypatch.setattr("src.platforms.get_scraper", lambda plat: fake_scraper)
+    monkeypatch.setattr("pr._check_platform_ready", lambda plat: True)
+
+    async def fake_query(filename, **kwargs):
+        return 4, [
+            {"商品信息": {"商品标题": "货", "当前售价": "¥1", "商品链接": f"http://{i}",
+                         "商品ID": str(i)}, "爬取时间": "2026-10-31T00:00:00",
+             "platform": "goofish"}
+            for i in range(4)
+        ]
+
+    monkeypatch.setattr("src.services.result_storage_service.query_result_records", fake_query)
+    exported = {}
+    monkeypatch.setattr(
+        "src.services.search_output_service.export_search_results",
+        lambda kw, items_by_platform: exported.setdefault("x", (kw, items_by_platform)) or "/tmp/x",
+    )
+
+    cmd_crawl(_args())
+    assert captured["platforms"] == ["goofish", "jd", "taobao", "1688"]
+    assert "x" in exported
+    kw, by_platform = exported["x"]
+    assert kw == "希捷"
+    assert "goofish" in by_platform

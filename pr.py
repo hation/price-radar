@@ -218,15 +218,23 @@ def _cmd_task_start_stop(args, repo):
 
 
 def cmd_crawl(args):
-    """按关键词爬取并落库（默认 keyword 模式，纯采集）。"""
-    from src.platforms import get_scraper, normalize_platform_key, platform_display_name
-    from src.services.result_storage_service import query_result_records
-    from src.services.task_generation_runner import build_criteria_filename
+    """按关键词爬取并落库；--platform all 遍历全部平台；爬完自动导出到 output/。"""
     from src.infrastructure.persistence.storage_names import build_result_filename
+    from src.platforms import (
+        SCRAPER_REGISTRY,
+        get_scraper,
+        normalize_platform_key,
+        platform_display_name,
+    )
+    from src.services.result_storage_service import query_result_records
+    import src.services.search_output_service as sos
+    from src.services.task_generation_runner import build_criteria_filename
 
-    platform = normalize_platform_key(args.platform)
-    if not _check_platform_ready(platform):
-        return
+    platforms = list(SCRAPER_REGISTRY.keys())
+    if args.platform != "all":
+        platforms = [normalize_platform_key(args.platform)]
+        if not _check_platform_ready(platforms[0]):
+            return
 
     if args.mode == "ai":
         criteria = build_criteria_filename(args.crawl)
@@ -234,20 +242,25 @@ def cmd_crawl(args):
             print(f"关键词 '{args.crawl}' 尚无分析标准文件: {criteria}")
             print("请先在 Web UI 用 AI 生成任务，或改用 --mode keyword 纯采集。")
             return
-        print(f"[info] 将采用分析标准: {criteria}（当前采集管线为纯抓取，AI 分析由任务管线执行）")
+        print(f"[info] 将采用分析标准: {criteria}（当前采集管线为纯抓取）")
 
-    task_config = {
-        "task_name": args.crawl,
-        "keyword": args.crawl,
-        "platform": platform,
-        "max_pages": args.pages,
-        "decision_mode": args.mode,
-    }
-    print(f"开始爬取: {args.crawl} [{platform_display_name(platform)}] {args.pages} 页")
-    count = asyncio.run(get_scraper(platform)(task_config=task_config, debug_limit=0))
-    print(f"本次新增 {count} 个商品")
-    if count <= 0:
-        return
+    failed = []
+    for platform in platforms:
+        if platform == "goofish" and not _check_platform_ready(platform):
+            failed.append((platform, "闲鱼 CDP 未就绪"))
+            continue
+        task_config = {
+            "task_name": args.crawl,
+            "keyword": args.crawl,
+            "platform": platform,
+            "max_pages": args.pages,
+            "decision_mode": args.mode,
+        }
+        print(f"开始爬取: {args.crawl} [{platform_display_name(platform)}] {args.pages} 页")
+        count = asyncio.run(get_scraper(platform)(task_config=task_config, debug_limit=0))
+        print(f"[{platform}] 新增 {count} 个商品")
+    for platform, reason in failed:
+        print(f"[{platform}] 跳过: {reason}")
 
     total, items = asyncio.run(
         query_result_records(
@@ -257,10 +270,24 @@ def cmd_crawl(args):
             sort_by="crawl_time",
             sort_order="desc",
             page=1,
-            limit=min(count, 50),
+            limit=3000,
         )
     )
-    _print_items(items, json_out=args.json)
+    items_by_platform: dict[str, list] = {}
+    for record in items:
+        plat = record.get("platform") or "未知"
+        items_by_platform.setdefault(plat, []).append(record)
+
+    if args.json and items:
+        _print_json(items)
+        return
+
+    if items_by_platform:
+        out_dir = sos.export_search_results(args.crawl, items_by_platform)
+        print(f"已导出到: {out_dir}")
+        print(f"  分平台 CSV + 合并 CSV({out_dir}/<关键词>_merged.csv) + JSONL")
+    else:
+        print("本次没有可导出的结果。")
 
 
 def _print_items(items, json_out=False):
