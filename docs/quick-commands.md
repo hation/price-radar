@@ -34,6 +34,26 @@
   ```
 - **各平台登录态**：闲鱼在 CDP Chrome 登录；京东/淘宝/1688 可复用同一 Chrome 登录。未登录的平台会被跳过。
 
+## 启动 / 关闭项目
+
+### 启动
+
+| 场景 | 命令 |
+|---|---|
+| 一键启动（装依赖+构建前端+启动后端） | `bash start.sh` |
+| 仅启动后端（Web UI 在 http://localhost:8000） | `python3 -m src.app` |
+| 启动 CDP 专用 Chrome（爬虫必需，登录态持久） | 上方"使用前提"里的 Chrome 命令 |
+
+### 关闭
+
+| 场景 | 命令 |
+|---|---|
+| 关闭后端（8000 端口） | `lsof -ti :8000 | xargs kill` |
+| 关闭 CDP 专用 Chrome（9222 端口） | `pkill -f "remote-debugging-port=9222"` |
+| 一次全关（后端 + CDP Chrome） | `lsof -ti :8000 | xargs kill; pkill -f "remote-debugging-port=9222"` |
+
+> 提示：关闭 CDP Chrome 不影响 `state/cdp-chrome-profile/` 里的登录态，下次启动同参数 Chrome 即可复用。
+
 ## 常用示例
 
 ```
