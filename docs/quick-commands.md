@@ -1,70 +1,45 @@
-# 快捷触发词速查
+# 口语指令速查（给用户看）
 
-本文件是 price-radar 项目的快捷指令文档。**直接对 Trae 说下面的短句即可**，AI 会按"完整行为"自动执行。详细 CLI 命令见 [cli.md](cli.md)。
+> 你**不需要记任何命令**。对 AI 说日常短句即可，AI 会自动判断意图并执行。
+> 例如你说「关闭项目」，AI 就知道要停掉后端和爬虫浏览器。
 
-## 核心触发词
+## 你可以直接说这些
 
-| 你说 | AI 自动执行的完整行为 |
+| 你说 | AI 会做什么 |
 |---|---|
-| **爬取 X 数据**（如「爬取希捷数据」） | 执行 `python pr.py --crawl "X" --pages 10 --platform all`（闲鱼/京东/淘宝/1688 全部平台，各前 10 页）；未登录平台跳过并说明原因；检查 `output/` 最新文件夹（分平台 CSV + 合并 CSV 含 platform 列 + JSONL）；汇报合并 CSV 路径和各平台条数 |
-| **爬取 X 数据 N 页**（如「爬取希捷数据 5 页」） | 同上，但页数为 N |
-| **查 X 的历史走势**（如「查希捷的历史走势」） | 执行 `python pr.py --trend "X" --days 30`，输出每日最低/均价/最高价走势 |
-| **查看任务** | 执行 `python pr.py --task list`，展示全部任务 |
-| **把 X 的 CSV 给我** | 读取 `output/` 下 X 关键词最新文件夹的合并 CSV，给出路径链接 |
+| **关闭项目** | 停掉后端服务（8000 端口）+ 关闭 CDP 爬虫 Chrome（9222 端口） |
+| **启动项目** | 启动后端服务（http://localhost:8000）+ 启动 CDP 爬虫 Chrome |
+| **爬取 X 数据**（如「爬取希捷数据」） | 四个平台（闲鱼/京东/淘宝/1688）各爬前 10 页，汇总导出，把合并 CSV 路径和每个平台条数告诉你 |
+| **爬取 X 数据 N 页**（如「爬取希捷数据 5 页」） | 同上，页数按你说的来 |
+| **查 X 的历史走势**（如「希捷走势怎么样」） | 调出该关键词近 30 天的价格走势（每日最低/均价/最高价） |
+| **看下任务** / **现在有什么任务** | 列出全部监控任务 |
+| **把 X 的 CSV 给我** | 给你 X 关键词最新一次爬取导出的合并 CSV |
 
-## 完整行为定义（爬取类）
+## AI 执行约定
 
-用户说「爬取 X 数据」时，AI 执行：
+- **爬取类**：未登录的平台自动跳过并说明原因，不中断整个流程；爬完自动检查 `output/` 最新文件夹（分平台 CSV + 合并 CSV + JSONL），然后汇报路径和条数。
+- **关闭/启动**：按端口识别进程（后端 8000、CDP Chrome 9222），关闭不影响登录态。
+- 关键词从你的话里直接提取，不用你额外说命令。
 
-1. **执行命令**：`python pr.py --crawl "X" --pages 10 --platform all`
-2. **平台容错**：某平台未登录/触发风控（如滑块）→ 跳过该平台并说明原因，继续其余平台
-3. **校验产物**：爬完后检查 `output/` 下**最新生成**的文件夹，确认存在：
-   - 分平台 CSV（`X_闲鱼.csv` / `X_jd.csv` 等）
-   - 合并 CSV（`X_merged.csv`，含 platform 列）
-   - 合并 JSONL（`X_merged.jsonl`）
-4. **汇报**：合并 CSV 完整路径 + 各平台抓取条数
+## 前提（一般不用你管）
 
-## 使用前提
+- 爬虫需要 CDP 专用 Chrome 在跑（AI 会在「启动项目」或爬取前自动拉起，未跑时给你提示）。
+- 各平台登录态在 `state/cdp-chrome-profile/`，换机器/重装后需要登录一次，之后长期有效。
 
-- **CDP 专用 Chrome** 需运行（端口 9222），登录态持久化在 `state/cdp-chrome-profile/`：
-  ```bash
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-    --remote-debugging-port=9222 \
-    --user-data-dir=/Users/xingan/Documents/software/aiengine/price-radar/state/cdp-chrome-profile
-  ```
-- **各平台登录态**：闲鱼在 CDP Chrome 登录；京东/淘宝/1688 可复用同一 Chrome 登录。未登录的平台会被跳过。
-
-## 启动 / 关闭项目
-
-### 启动
-
-| 场景 | 命令 |
-|---|---|
-| 一键启动（装依赖+构建前端+启动后端） | `bash start.sh` |
-| 仅启动后端（Web UI 在 http://localhost:8000） | `python3 -m src.app` |
-| 启动 CDP 专用 Chrome（爬虫必需，登录态持久） | 上方"使用前提"里的 Chrome 命令 |
-
-### 关闭
-
-| 场景 | 命令 |
-|---|---|
-| 关闭后端（8000 端口） | `lsof -ti :8000 | xargs kill` |
-| 关闭 CDP 专用 Chrome（9222 端口） | `pkill -f "remote-debugging-port=9222"` |
-| 一次全关（后端 + CDP Chrome） | `lsof -ti :8000 | xargs kill; pkill -f "remote-debugging-port=9222"` |
-
-> 提示：关闭 CDP Chrome 不影响 `state/cdp-chrome-profile/` 里的登录态，下次启动同参数 Chrome 即可复用。
-
-## 常用示例
+## 示例对话
 
 ```
-爬取希捷数据
-爬取希捷数据 5 页
-爬取三星/SK 64G5600 数据
-查希捷的历史走势
+用户：爬取希捷数据
+AI：执行多平台前 10 页爬取 → 汇报：
+    闲鱼 60 条 / 京东 116 条 / 淘宝 92 条 / 1688 117 条
+    合并 CSV: output/希捷_202610310955/希捷_merged.csv
+
+用户：关闭项目
+AI：已停止后端服务与 CDP Chrome，登录态已保留。
 ```
 
-## 相关文件
+## 相关文件（给 AI 看）
 
-- CLI 命令详解：`docs/cli.md`
+- AI 执行细节：`docs/cli.md`（CLI 命令）、`AGENTS.md`（规则）
 - CLI 实现：`pr.py`
 - 输出目录：`output/{关键词}_{yyyymmddhhmm}/`
