@@ -44,6 +44,7 @@ config.json
 .serena/
 price_history/
 /data/
+output/
 archive/
 # 登录态 / 浏览器指纹 / 运行数据(绝不入库!)
 state/
