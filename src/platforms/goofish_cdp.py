@@ -14,6 +14,7 @@ import os
 import random
 from datetime import datetime
 
+from src.platforms._human import human_click, human_scroll
 from src.platforms._web import CDP_START_HINT, dump_api_sample, persist_platform_items
 
 # 结果页 DOM 解析:闲鱼商品卡 a[href*=item?id=],innerText 含标题+¥价格
@@ -77,9 +78,7 @@ async def scrape_goofish(task_config: dict, debug_limit: int = 0):
 
             items: list[dict] = []
             for page_num in range(1, max_pages + 1):
-                for _ in range(4):
-                    await page.mouse.wheel(0, random.randint(900, 1500))
-                    await page.wait_for_timeout(random.randint(1000, 1800))
+                await human_scroll(page, rounds=4)
                 rows = await page.evaluate(DOM_PARSE_JS)
                 print(f"[goofish] 第 {page_num} 轮解析出 {len(rows)} 条商品。")
                 if not rows and page_num == 1:
@@ -102,9 +101,32 @@ async def scrape_goofish(task_config: dict, debug_limit: int = 0):
                         }
                     )
                 if page_num < max_pages:
-                    # 闲鱼滚动加载(无限流),继续滚即可
-                    await page.mouse.wheel(0, 2000)
-                    await page.wait_for_timeout(2500)
+                    # 闲鱼分页(2026-10-31 实测):页面底部有页码,SPA 翻页,URL 参数无效。
+                    # 先滚到底让分页渲染,再点页码数字(折叠时用下一页箭头),轮询等新商品。
+                    await page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+                    await page.wait_for_timeout(random.randint(1200, 2000))
+                    target = page.locator(
+                        f'[class*="search-pagination-page-box"]:text-is("{page_num + 1}")'
+                    ).first
+                    if await target.count():
+                        await human_click(page, target)
+                    else:
+                        arrow = page.locator(
+                            '[class*="search-pagination-arrow-container"]'
+                        ).nth(1)
+                        if await arrow.count():
+                            await human_click(page, arrow)
+                        else:
+                            break
+                    new_count = 0
+                    for _ in range(10):
+                        await page.wait_for_timeout(1500)
+                        new_count = await page.locator('a[href*="item?id="]').count()
+                        if new_count > 0:
+                            break
+                    if not new_count:
+                        print("[goofish] 翻页后无商品,提前结束。")
+                        break
 
             if not items:
                 return 0
