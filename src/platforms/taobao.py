@@ -18,6 +18,7 @@ import random
 from datetime import datetime
 from urllib.parse import quote
 
+from src.platforms._human import human_move_to
 from src.platforms._web import (
     CDP_START_HINT,
     dump_api_sample,
@@ -49,26 +50,6 @@ DOM_PARSE_JS = """() => {
     }
     return out;
 }"""
-
-
-async def _human_move_to(page, box_loc, x_ratio=0.5):
-    """多段折线+随机抖动的鼠标轨迹(拟人核心)。"""
-    bb = await box_loc.bounding_box()
-    if not bb:
-        return
-    tx = bb["x"] + bb["width"] * x_ratio
-    ty = bb["y"] + bb["height"] * random.uniform(0.4, 0.6)
-    x, y = random.randint(80, 500), random.randint(120, 480)
-    await page.mouse.move(x, y)
-    segs = random.randint(5, 9)
-    for i in range(1, segs + 1):
-        t = i / segs
-        nx = x + (tx - x) * t + random.uniform(-10, 10) * (1 - t)
-        ny = y + (ty - y) * t + random.uniform(-8, 8) * (1 - t)
-        await page.mouse.move(nx, ny, steps=random.randint(2, 6))
-        await page.wait_for_timeout(random.randint(8, 50))
-    await page.mouse.move(tx, ty)
-    await page.wait_for_timeout(random.randint(120, 400))
 
 
 async def _wait_new_search_tab(context, origin_page, timeout_s: int = 30):
@@ -124,7 +105,7 @@ async def scrape_taobao(task_config: dict, debug_limit: int = 0):
                 print("[taobao] 首页搜索框未找到(页面改版?),样本落盘。")
                 dump_api_sample(platform, keyword, page.url, {"error": "no_search_box"})
                 return 0
-            await _human_move_to(page, box)
+            await human_move_to(page, box)
             await page.mouse.down()
             await page.mouse.up()
             await page.wait_for_timeout(random.randint(500, 1200))
@@ -136,7 +117,7 @@ async def scrape_taobao(task_config: dict, debug_limit: int = 0):
 
             btn = page.locator("button[class*='btn-search'], .btn-search, button[class*='btn']").first
             if await btn.count():
-                await _human_move_to(page, btn)
+                await human_move_to(page, btn)
                 await page.mouse.down()
                 await page.mouse.up()
                 print("[taobao] 已点击搜索按钮(等待新 tab 结果页)……")
@@ -179,7 +160,7 @@ async def scrape_taobao(task_config: dict, debug_limit: int = 0):
                 if page_num < max_pages:
                     nxt = result_page.locator("[class*='next-next'], button[next], a[class*='next']").first
                     if await nxt.count() and await nxt.is_enabled():
-                        await _human_move_to(result_page, nxt)
+                        await human_move_to(result_page, nxt)
                         await result_page.mouse.down()
                         await result_page.mouse.up()
                         await result_page.wait_for_timeout(4000)
