@@ -16,6 +16,7 @@ import os
 import random
 from datetime import datetime
 
+from src.platforms._human import human_pause, human_scroll
 from src.platforms._web import CDP_START_HINT, dump_api_sample, persist_platform_items
 
 # 结果页 DOM 解析(京东新版 2026-09 实测):商品卡 = [data-sku] 元素(hash class 化,
@@ -151,9 +152,7 @@ async def scrape_jd(task_config: dict, debug_limit: int = 0):
             # ---- DOM 解析 + 拟人滚动 ----
             items: list[dict] = []
             for page_num in range(1, max_pages + 1):
-                for _ in range(5):
-                    await result_page.mouse.wheel(0, random.randint(900, 1600))
-                    await result_page.wait_for_timeout(random.randint(900, 1800))
+                await human_scroll(result_page, rounds=5)
                 rows = await result_page.evaluate(DOM_PARSE_JS)
                 print(f"[jd] 第 {page_num} 页 DOM 解析出 {len(rows)} 条商品。")
                 if not rows and page_num == 1:
@@ -179,12 +178,30 @@ async def scrape_jd(task_config: dict, debug_limit: int = 0):
                         }
                     )
                 if page_num < max_pages:
-                    nxt = result_page.locator("a.pf-next, a.next, [class*='next']").first
-                    if await nxt.count() and await nxt.is_enabled():
-                        await _human_move_to(result_page, nxt)
-                        await result_page.mouse.down()
-                        await result_page.mouse.up()
-                        await result_page.wait_for_timeout(4000)
+                    # 京东新版 SPA 分页:URL 参数 page=N 无效,必须点击下一页按钮
+                    # (2026-10-31 实测);原生 click 才能触发,拟人 mouse.down/up 无效
+                    nxt = result_page.locator(
+                        '[class*="_pagination_next_"], a.pf-next, [class*="next"]'
+                    ).first
+                    if await nxt.count() and await nxt.is_visible():
+                        try:
+                            await human_pause(result_page, 400, 1200)
+                            await nxt.click(timeout=5000)
+                        except Exception:
+                            print("[jd] 点击下一页失败,提前结束。")
+                            break
+                        # 翻页后 SPA 渲染较慢,轮询等新商品卡出现(避免误判提前结束)
+                        new_skus = []
+                        for _ in range(8):
+                            await result_page.wait_for_timeout(1500)
+                            new_skus = await result_page.evaluate(
+                                "() => Array.from(document.querySelectorAll('[data-sku]')).map(e => e.getAttribute('data-sku')).slice(0, 5)"
+                            )
+                            if new_skus:
+                                break
+                        if not new_skus:
+                            print("[jd] 翻页后无商品,提前结束。")
+                            break
                     else:
                         break
 
