@@ -16,15 +16,17 @@ import random
 from datetime import datetime
 from urllib.parse import quote
 
+from src.platforms._human import human_pause, human_scroll
 from src.platforms._web import CDP_START_HINT, dump_api_sample, persist_platform_items
 
 CDP_ENDPOINT = os.getenv("ALI1688_CDP_ENDPOINT", "http://127.0.0.1:9222")
 
-# 卡片解析(2026-09-19 实测定型:43 条全字段成功)
+# 卡片解析(2026-09-19 实测定型:43 条全字段成功;2026-10-31 页面改版,选择器由
+# a.search-offer-item 改为 a[class*="offerCard"],hash 后缀防失效)
 DOM_PARSE_JS = """() => {
     const out = [];
     const seen = new Set();
-    for (const card of document.querySelectorAll('a.search-offer-item')) {
+    for (const card of document.querySelectorAll('a[class*="offerCard"]')) {
         let href = card.getAttribute('href') || '';
         let m = href.match(/offer\\/(\\d{6,})\\.html/);
         if (!m) {
@@ -51,7 +53,7 @@ DOM_PARSE_JS = """() => {
         let seller = '';
         const sm = text.match(/([\\u4e00-\\u9fa5A-Za-z0-9]+(?:公司|厂|经营部|商行|工作室))/g);
         if (sm) seller = sm[sm.length - 1];
-        const qm = text.match(/(\\d+\\+?)件/);
+        const qm = text.match(/(\\d+(?:\\.\\d+)?万?\\+?)件/);
         const qty = qm ? qm[1] : '';
         const link = href.startsWith('http') ? href
             : 'https://detail.1688.com/offer/' + offerId + '.html';
@@ -84,9 +86,15 @@ async def scrape_ali1688(task_config: dict, debug_limit: int = 0):
         page = await context.new_page()
 
         try:
-            url = f"https://s.1688.com/selloffer/offer_search.htm?keywords={quote(keyword)}"
-            print(f"[1688] 打开搜索页: {url}")
-            await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            # 1688 搜索页要求 GBK 编码关键词(2026-10-31 实测),quote 默认 UTF-8 会拿到空结果;
+            # 翻页用 beginPage 参数(2026-10-31 实测),第 1 页不带参数
+            base_url = (
+                "https://s.1688.com/selloffer/offer_search.htm"
+                f"?keywords={quote(keyword, encoding='gbk')}"
+                "&spm=a26352.13672862.searchbox.0"
+            )
+            print(f"[1688] 打开搜索页: {base_url}")
+            await page.goto(base_url, wait_until="domcontentloaded", timeout=45000)
             await page.wait_for_timeout(random.randint(6000, 9000))
 
             body_head = (await page.inner_text("body"))[:400]
@@ -98,16 +106,29 @@ async def scrape_ali1688(task_config: dict, debug_limit: int = 0):
 
             items: list[dict] = []
             for page_num in range(1, max_pages + 1):
-                # 轻滚动促懒加载(1688 风控敏感,只滚两轮不深翻)
-                for _ in range(2):
-                    await page.mouse.wheel(0, random.randint(1100, 1500))
-                    await page.wait_for_timeout(random.randint(1500, 2500))
+                if page_num > 1:
+                    await human_pause(page, 1500, 3000)
+                    # 直接改 beginPage 跳页(比点击下一页稳定)
+                    page_url = f"{base_url}&beginPage={page_num}"
+                    print(f"[1688] 翻页 -> beginPage={page_num}")
+                    await page.goto(page_url, wait_until="domcontentloaded", timeout=45000)
+                    # 翻页后懒加载较慢,轮询等卡片出现(超时也继续滚动兜底)
+                    for _ in range(10):
+                        if await page.locator('a[class*="offerCard"]').count() > 0:
+                            break
+                        await page.mouse.wheel(0, 2000)
+                        await page.wait_for_timeout(2000)
+                # 拟人滚动促懒加载(1688 风控敏感)
+                await human_scroll(page, rounds=3)
                 rows = await page.evaluate(DOM_PARSE_JS)
                 print(f"[1688] 第 {page_num} 轮解析出 {len(rows)} 条商品。")
                 if not rows and page_num == 1:
                     dump_api_sample(platform, keyword, page.url,
                                     {"error": "dom_parse_empty", "body_head": body_head})
                     return 0
+                if not rows:
+                    print(f"[1688] 第 {page_num} 页无商品,提前结束。")
+                    break
                 for r in rows:
                     items.append(
                         {
@@ -123,8 +144,6 @@ async def scrape_ali1688(task_config: dict, debug_limit: int = 0):
                             "商品ID": r["offerId"],
                         }
                     )
-                if page_num < max_pages:
-                    await page.wait_for_timeout(random.randint(3000, 5000))
 
             if not items:
                 return 0
